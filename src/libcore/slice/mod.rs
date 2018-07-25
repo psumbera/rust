@@ -2344,7 +2344,17 @@ macro_rules! iterator {
             // Helper function for creating a slice from the iterator.
             #[inline(always)]
             fn make_slice(&self) -> &'a [T] {
-                unsafe { from_raw_parts(self.ptr, self.len()) }
+                // Another way to compute the length (different from `self.len`).
+                // This code similar to how it was before the refactoring.
+                // Any change seems to affect performance.
+                let diff = (self.end as usize).wrapping_sub(self.ptr as usize);
+                let len = if mem::size_of::<T>() == 0 {
+                    // end is really ptr+len, so we are already done
+                    diff
+                } else {
+                    diff / mem::size_of::<T>()
+                };
+                unsafe { from_raw_parts(self.ptr, len) }
             }
 
             // Helper function for moving the start of the iterator forwards by `offset` elements,
@@ -2382,12 +2392,10 @@ macro_rules! iterator {
         impl<'a, T> ExactSizeIterator for $name<'a, T> {
             #[inline(always)]
             fn len(&self) -> usize {
-                let diff = (self.end as usize).wrapping_sub(self.ptr as usize);
                 if mem::size_of::<T>() == 0 {
-                    // end is really ptr+len, so we are already done
-                    diff
+                    (self.end as usize).wrapping_sub(self.ptr as usize)
                 } else {
-                    diff / mem::size_of::<T>()
+                    unsafe { self.end.offset_from(self.ptr) as usize }
                 }
             }
 
@@ -2432,7 +2440,9 @@ macro_rules! iterator {
 
             #[inline]
             fn nth(&mut self, n: usize) -> Option<$elem> {
-                if n >= self.len() {
+                // Use the len of the slice to hint optimizer to remove result index bounds check.
+                let len = self.make_slice().len();
+                if n >= len {
                     // This iterator is now empty.
                     if mem::size_of::<T>() == 0 {
                         // We have to do it this way as `ptr` may never be 0, but `end`
@@ -2760,7 +2770,9 @@ impl<'a, T> IterMut<'a, T> {
     /// ```
     #[stable(feature = "iter_to_slice", since = "1.4.0")]
     pub fn into_slice(self) -> &'a mut [T] {
-        unsafe { from_raw_parts_mut(self.ptr, self.len()) }
+        // Use the len of the slice to hint optimizer to remove result index bounds check.
+        let n = self.make_slice().len();
+        unsafe { from_raw_parts_mut(self.ptr, n) }
     }
 }
 
