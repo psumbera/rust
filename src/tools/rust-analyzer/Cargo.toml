@@ -34,6 +34,7 @@ inherits = "release"
 debug = 2
 
 [patch.'crates-io']
+nix = { git = "https://github.com/psumbera/nix.git", branch = "mypatch" }
 # rowan = { path = "../rowan" }
 
 # chalk-solve = { path = "../chalk/chalk-solve" }
@@ -225,3 +226,5 @@ print_stderr = "warn"
 
 rc_buffer = "warn"
 str_to_string = "warn"
+
+
